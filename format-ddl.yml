@@ -10,7 +10,50 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel.
 jobs:
-  format-sql:
+  propose-formatting:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
+    steps:
+      # 1. Check out the code from the pull request branch
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up a Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Run the DDL formatter script
+      - name: Run DDL Formatter
+        run: |
+          python ddl_formatter_combined_4.py --mode folder --input . --output .
+
+      # 4. Check for and display changes
+      - name: Check for formatting changes
+        id: check_changes
+        run: |
+          if [[ -n $(git status -s) ]]; then
+            echo "Formatting changes detected."
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "--- PROPOSED CHANGES ---"
+            git diff
+            echo "------------------------"
+          else
+            echo "No formatting changes needed."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+  apply-formatting:
+    # This job runs only if the previous job found changes.
+    needs: propose-formatting
+    if: needs.propose-formatting.outputs.has_changes == 'true'
+
+    # This environment needs to be created in the repository settings
+    # with a "Required reviewers" protection rule.
+    environment: DDL Formatting Approval
+
     runs-on: ubuntu-latest
     steps:
       # 1. Check out the code from the pull request branch
@@ -26,23 +69,17 @@ jobs:
         with:
           python-version: '3.11' # Or your preferred Python version
 
-      # 3. Run the DDL formatter script
-      # The script will process all .sql files in the repository and save them to an output directory.
+      # 3. Run the DDL formatter script again to apply changes
       - name: Run DDL Formatter
         run: |
-          find . -type f -name "*.sql" | while read -r file; do
-            if grep -iq 'DDL' "$file"; then
-              echo "Formatting '$file' as it contains 'DDL'..."
-              python ddl_formatter_combined_4.py --mode file --input "$file" --output "$file"
-            fi
-          done
+          python ddl_formatter_combined_4.py --mode folder --input . --output .
 
-      # 4. Commit the formatted files back to the PR branch
+      # 4. Commit and push the approved changes
       - name: Commit and push changes
         run: |
           git config --global user.name 'DDL Formatter Bot'
           git config --global user.email 'actions@github.com'
-          # Check if there are any changes to commit
+          # The 'if' condition for this job already ensures there are changes.
           if [[ -n $(git status -s) ]]; then
             git add .
             git commit -m "Automated DDL Formatting"
