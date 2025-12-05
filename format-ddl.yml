@@ -1,0 +1,50 @@
+# This is a GitHub Actions workflow that automatically formats SQL files in a pull request.
+name: Format SQL DDL
+
+# Controls when the action will run.
+# It triggers on pull requests that are opened or updated, but only if they contain .sql files.
+on:
+  pull_request:
+    paths:
+      - '**.sql'
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel.
+jobs:
+  format-sql:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out the code from the pull request branch
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # We need to fetch the branch history to push changes back
+          ref: ${{ github.head_ref }}
+
+      # 2. Set up a Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Or your preferred Python version
+
+      # 3. Run the DDL formatter script
+      # The script will process all .sql files in the repository and save them to an output directory.
+      - name: Run DDL Formatter
+        run: |
+          find . -type f -name "*.sql" | while read -r file; do
+            if grep -iq 'DDL' "$file"; then
+              echo "Formatting '$file' as it contains 'DDL'..."
+              python ddl_formatter_combined_4.py --mode file --input "$file" --output "$file"
+            fi
+          done
+
+      # 4. Commit the formatted files back to the PR branch
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'DDL Formatter Bot'
+          git config --global user.email 'actions@github.com'
+          # Check if there are any changes to commit
+          if [[ -n $(git status -s) ]]; then
+            git add .
+            git commit -m "Automated DDL Formatting"
+            git push
+          fi

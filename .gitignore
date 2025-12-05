@@ -1,0 +1,21 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# PyInstaller files
+*.spec
+build/
+dist/
+
+# IDE and editor specific
+.vscode/
+.idea/
+*.swp
